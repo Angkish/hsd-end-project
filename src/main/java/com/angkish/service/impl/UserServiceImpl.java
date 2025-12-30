@@ -127,18 +127,18 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
     public Result sendRegisterCode(String email) {
 
         // 1. 是否已注册
-        Long count = userMapper.selectCount(
+        User user = userMapper.selectOne(
                 new QueryWrapper<User>().eq("email", email)
         );
-        if (count > 0) {
-            throw new BusinessException("该邮箱已注册");
+        if (user == null) {
+            return Result.error(MessageConstant.EMAIL_ERROR);
         }
 
         // 2. 生成验证码
         String code = RandomCodeUtil.generateRandomCode();
 
         // 3. 存Redis
-        String redisCodeKey = "register:email:code:" + email;
+        String redisCodeKey = "email:code:" + email;
         redisTemplate.opsForValue()
                 .set(redisCodeKey, code, 5, TimeUnit.MINUTES);
 
@@ -164,7 +164,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         }
 
         // 验证验证码
-        String redisCodeKey = "register:email:code:" + userEmailLoginDTO.getEmail();
+        String redisCodeKey = "email:code:" + userEmailLoginDTO.getEmail();
         String storedCode = (String) redisTemplate.opsForValue().get(redisCodeKey);
 
         if (storedCode == null) {
