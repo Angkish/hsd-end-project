@@ -29,7 +29,7 @@ public class WebMvcConfiguration extends WebMvcConfigurationSupport {
 
         registry.addInterceptor(jwtTokenUserInterceptor)
                 .addPathPatterns("/**")
-                .excludePathPatterns("/user/login");
+                .excludePathPatterns("/user/login","/user/emailLogin");
     }
 
 //    /**

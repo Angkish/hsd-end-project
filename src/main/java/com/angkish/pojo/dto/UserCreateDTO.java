@@ -24,6 +24,9 @@ public class UserCreateDTO implements Serializable{
     @NotBlank(message = MessageConstant.PASSWORD + MessageConstant.NOT_NULL)
     @Pattern(regexp = RegexPatterns.PASSWORD_REGEX, message = MessageConstant.PASSWORD + MessageConstant.FORMAT_ERROR)
     private String password;
+    
+    @Pattern(regexp = RegexPatterns.EMAIL_REGEX, message = MessageConstant.EMAIL + MessageConstant.FORMAT_ERROR)
+    private String email;
 
     private String realName;
 

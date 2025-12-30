@@ -9,6 +9,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerInterceptor;
@@ -23,41 +24,52 @@ public class JwtTokenUserInterceptor implements HandlerInterceptor {
     @Autowired
     private JwtProperties jwtProperties;
 
-    /**
-     * 校验jwt
-     *
-     * @param request
-     * @param response
-     * @param handler
-     * @return
-     * @throws Exception
-     */
-    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
+    @Autowired
+    private RedisTemplate<String, Object> redisTemplate;
 
-        System.out.println("当前线程的ID："+Thread.currentThread().getId());
+    @Override
+    public boolean preHandle(HttpServletRequest request,
+                             HttpServletResponse response,
+                             Object handler) throws Exception {
 
-
-        //判断当前拦截到的是Controller的方法还是其他资源
+        // 非 Controller 方法直接放行
         if (!(handler instanceof HandlerMethod)) {
-            //当前拦截到的不是动态方法，直接放行
             return true;
         }
 
-        //1、从请求头中获取令牌
+        // 1. 从请求头获取 token
         String token = request.getHeader(jwtProperties.getUserTokenName());
+        if (token == null || token.isBlank()) {
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            return false;
+        }
 
-        //2、校验令牌
         try {
-            log.info("jwt校验:{}", token);
-            Claims claims = JwtUtil.parseJWT(jwtProperties.getUserSecretKey(), token);
-            Long userId = Long.valueOf(claims.get(JwtClaimsConstant.USER_ID).toString());
-            log.info("当前用户id:{}", userId);
+            // 2. 校验 JWT
+            Claims claims = JwtUtil.parseJWT(
+                    jwtProperties.getUserSecretKey(), token);
+
+            Long userId = Long.valueOf(
+                    claims.get(JwtClaimsConstant.USER_ID).toString());
+
+            // 3. 从 Redis 中获取 token
+            String redisKey = "login:token:" + userId;
+            String redisToken = (String) redisTemplate.opsForValue().get(redisKey);
+
+            // 4. Redis 校验（核心）
+            if (redisToken == null || !redisToken.equals(token)) {
+                log.warn("token已失效，userId={}", userId);
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                return false;
+            }
+
+            // 5. 保存当前用户上下文
             BaseContext.setCurrentId(userId);
-            //3、通过，放行
+
             return true;
-        } catch (Exception ex) {
-            //4、不通过，响应401状态码
-            response.setStatus(401);
+        } catch (Exception e) {
+            log.error("token校验失败", e);
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             return false;
         }
     }
